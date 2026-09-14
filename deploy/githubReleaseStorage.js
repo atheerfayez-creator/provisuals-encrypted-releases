@@ -1,4 +1,5 @@
 import { createDecipheriv, createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
@@ -277,11 +278,20 @@ async function* streamParts(target, parts, manifest) {
 }
 
 function decryptionKey() {
-    if (!env.GITHUB_RELEASES_DECRYPTION_KEY) {
+    let encodedKey = env.GITHUB_RELEASES_DECRYPTION_KEY;
+    if (!encodedKey) {
+        try {
+            encodedKey = readFileSync('/home/container/.decryption-key', 'utf8').trim();
+        }
+        catch {
+            encodedKey = '';
+        }
+    }
+    if (!encodedKey) {
         throw new AppError('Encrypted release storage is not configured.', 'PRIVATE_STORAGE_UNAVAILABLE', 503);
     }
-    const key = Buffer.from(env.GITHUB_RELEASES_DECRYPTION_KEY, 'base64');
-    if (key.length !== 32 || key.toString('base64') !== env.GITHUB_RELEASES_DECRYPTION_KEY) {
+    const key = Buffer.from(encodedKey, 'base64');
+    if (key.length !== 32 || key.toString('base64') !== encodedKey) {
         throw storageError('The encrypted release key is invalid.');
     }
     return key;
